@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Robô Num — Montador Mágico</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f3f7fc;color:#18324c;font-family:ui-rounded,'Arial Rounded MT Bold',system-ui,sans-serif;text-align:center}main{max-width:680px;margin:auto;padding:28px 16px}h1{font-size:clamp(1.6rem,6vw,2.2rem);margin:0 0 12px}p{line-height:1.5}button{font:inherit;cursor:pointer;touch-action:manipulation}button:focus-visible{outline:4px solid #623bc4;outline-offset:5px}.presets{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:24px 0}.presets button,.reset{min-width:48px;min-height:48px;border:2px solid #c7d5e5;border-radius:14px;background:white;color:#18324c;font-weight:750}.presets button[aria-pressed=true]{border-color:#1766ba;background:#e3efff}.workspace{background:white;border-radius:24px;padding:24px 8px;box-shadow:0 8px 30px #193e6910}.legend{display:flex;justify-content:center;gap:28px;font-weight:bold}.blue{color:#145eb0}.gold{color:#795500}.board{--cell:clamp(72px,23vw,104px);position:relative;width:calc(var(--cell)*3 + 36px);height:210px;margin:20px auto 0}.tens{position:absolute;top:20px;left:0;display:flex;background:#1766ba;color:white;border-radius:14px;box-shadow:0 6px 0 #104782}.digit,.unit{width:var(--cell);height:calc(var(--cell)*1.25);display:grid;place-items:center;font:800 clamp(64px,19vw,88px)/1 system-ui,sans-serif;font-variant-numeric:tabular-nums}.zero{border:3px dashed #ffffff70;border-radius:12px}.unit{position:absolute;top:20px;left:calc(var(--cell)*2 + 36px);border:0;border-radius:12px;background:#ffcf3e;color:#453300;box-shadow:0 6px 0 #b68b13;touch-action:none;user-select:none;z-index:2;transition:left .35s,transform .35s}.unit.joined{left:var(--cell)}.unit.lifted{transform:translateY(-55px) rotate(-8deg)}.unit.dragging{transition:none;cursor:grabbing}.equation{font-size:clamp(1.7rem,7vw,2.2rem);font-weight:800;min-height:48px;margin:0}.hint{min-height:48px;margin:12px 4px 0}.reset{padding:8px 20px;margin-top:20px}footer{font-size:.8rem;color:#53677c;margin:28px 0 0}@media(prefers-reduced-motion:reduce){.unit{transition:none}}
+</style>
+</head>
+<body>
+<main>
+<h1>Robô Num 🤖</h1>
+<p>Montador Mágico das Dezenas</p>
+<nav class="presets" aria-label="Escolha um número">
+<button aria-pressed="true">45</button><button aria-pressed="false">42</button><button aria-pressed="false">34</button><button aria-pressed="false">28</button><button aria-pressed="false">53</button><button aria-pressed="false">67</button>
+</nav>
+<section class="workspace" aria-label="Cartas de Montessori">
+<div class="legend"><span class="blue">Dezenas</span><span class="gold">Unidades</span></div>
+<div class="board">
+<div class="tens" role="img" aria-label="40, quatro dezenas"><span class="digit" id="ten">4</span><span class="digit zero">0</span></div>
+<button class="unit" id="unit" aria-label="5 unidades. Toque para cobrir o zero.">5</button>
+</div>
+<p class="equation" aria-live="polite"><span class="blue" id="whole">40</span> + <span class="gold" id="ones">5</span><span id="result"></span></p>
+<p class="hint" id="hint">Toque ou arraste o <b>5</b> para cobrir o <b>0</b>.</p>
+</section>
+<div class="actions">
+<button class="reset" id="listen" disabled>Ouvir novamente</button>
+<button class="reset" id="mute" aria-pressed="false">Silenciar voz</button>
+<button class="reset" id="reset">Separar as cartas</button>
+</div>
+<p id="audio-status" role="status"></p>
+<footer>Desenvolvido por Felipe B. Tabai</footer>
+</main>
+<script>
+const unit=document.querySelector('#unit'),board=document.querySelector('.board'),tens=document.querySelector('.tens'),result=document.querySelector('#result'),hint=document.querySelector('#hint');
+let number=45,joined=false,drag=null,suppressClick=false;
+const listen=document.querySelector('#listen'),mute=document.querySelector('#mute'),audioStatus=document.querySelector('#audio-status');
+const synth=window.speechSynthesis;
+const hasSpeech=!!synth&&typeof window.SpeechSynthesisUtterance==='function';
+let muted=false,speechId=0;
+const tensWords=['','dez','vinte','trinta','quarenta','cinquenta','sessenta','setenta','oitenta','noventa'];
+const unitWords=['','um','dois','três','quatro','cinco','seis','sete','oito','nove'];
+function numberWords(n){return tensWords[Math.floor(n/10)]+(n%10?' e '+unitWords[n%10]:'')}
+function stopVoice(){speechId++;if(hasSpeech)synth.cancel()}
+function syncAudio(){
+ listen.disabled=!hasSpeech||muted||!joined;
+ mute.disabled=!hasSpeech;
+ mute.textContent=muted?'Ativar voz':'Silenciar voz';
+ mute.setAttribute('aria-pressed',String(muted));
+}
+function speakNumber(n){
+ stopVoice();
+ if(!hasSpeech||muted)return;
+ const id=speechId;
+ const speech=new SpeechSynthesisUtterance(numberWords(n));
+ speech.lang='pt-BR';speech.rate=0.85;speech.pitch=1;
+ const voices=synth.getVoices();
+ const voice=voices.find(v=>v.lang.toLowerCase().replace('_','-')==='pt-br');
+ if(voice)speech.voice=voice;
+ speech.onerror=e=>{if(id===speechId&&e.error!=='interrupted'&&e.error!=='canceled')audioStatus.textContent='Não foi possível ouvir. Toque em “Ouvir novamente” para tentar.'};
+ audioStatus.textContent='';
+ try{synth.speak(speech)}catch{audioStatus.textContent='A voz não está disponível neste navegador.'}
+}
+listen.addEventListener('click',()=>speakNumber(unit.classList.contains('lifted')?Math.floor(number/10)*10:number));
+mute.addEventListener('click',()=>{muted=!muted;stopVoice();audioStatus.textContent='';syncAudio()});
+window.addEventListener('pagehide',stopVoice);
+if(!hasSpeech)audioStatus.textContent='Este navegador não oferece leitura em voz. Você pode continuar montando as cartas.';
+function render(){
+ const t=Math.floor(number/10),u=number%10;
+ document.querySelector('#ten').textContent=t;
+ document.querySelector('#whole').textContent=t*10;
+ document.querySelector('#ones').textContent=u;
+ unit.textContent=u;
+ tens.setAttribute('aria-label',`${t*10}, ${t} dezenas`);
+ unit.classList.toggle('joined',joined);
+ unit.classList.remove('lifted');
+ unit.setAttribute('aria-label',joined?`${number}. Toque na unidade ${u} para levantar a carta e ver o zero.`:`${u} unidades. Toque para cobrir o zero.`);
+ result.textContent=joined?` = ${number}`:'';
+ hint.innerHTML=joined?`Você montou <b>${number}</b>! Toque na carta amarela para ver o zero.`:`Toque ou arraste o <b>${u}</b> para cobrir o <b>0</b>.`;
+ document.querySelectorAll('.presets button').forEach(b=>b.setAttribute('aria-pressed',String(Number(b.textContent)===number)));
+ syncAudio();
+}
+function cleanDrag(){if(drag&&unit.hasPointerCapture(drag.id))unit.releasePointerCapture(drag.id);drag=null;unit.style.transform='';unit.classList.remove('dragging')}
+document.querySelectorAll('.presets button').forEach(b=>b.addEventListener('click',()=>{stopVoice();cleanDrag();number=Number(b.textContent);joined=false;render()}));
+document.querySelector('#reset').addEventListener('click',()=>{stopVoice();cleanDrag();joined=false;render()});
+unit.addEventListener('click',()=>{
+ if(suppressClick){suppressClick=false;return}
+ if(!joined){joined=true;render();speakNumber(number);return}
+ const lifted=unit.classList.toggle('lifted');
+ hint.textContent=lifted?`O ${Math.floor(number/10)*10} continua aqui! Toque para baixar a carta.`:`Você montou ${number}! Toque na carta amarela para ver o zero.`;
+ speakNumber(lifted?Math.floor(number/10)*10:number);
+});
+unit.addEventListener('pointerdown',e=>{
+ if(joined||!e.isPrimary||e.button!==0)return;
+ suppressClick=false;drag={id:e.pointerId,x:e.clientX,y:e.clientY,moved:false};unit.setPointerCapture(e.pointerId);
+});
+unit.addEventListener('pointermove',e=>{
+ if(!drag||e.pointerId!==drag.id)return;
+ const dx=e.clientX-drag.x,dy=e.clientY-drag.y;
+ if(Math.hypot(dx,dy)>8)drag.moved=true;
+ if(drag.moved){unit.classList.add('dragging');unit.style.transform=`translate(${dx}px,${dy}px)`}
+});
+unit.addEventListener('pointerup',e=>{
+ if(!drag||e.pointerId!==drag.id)return;
+ const moved=drag.moved,card=unit.getBoundingClientRect(),target=document.querySelector('.zero').getBoundingClientRect();
+ const hit=card.left<target.right&&card.right>target.left&&card.top<target.bottom&&card.bottom>target.top;
+ cleanDrag();
+ if(moved){suppressClick=true;if(hit){joined=true;render();speakNumber(number)}setTimeout(()=>{suppressClick=false},0)}
+});
+unit.addEventListener('pointercancel',cleanDrag);
+unit.addEventListener('lostpointercapture',()=>{if(drag)cleanDrag()});
+render();
+</script>
+</body>
+</html>
